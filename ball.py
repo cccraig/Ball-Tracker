@@ -1,6 +1,5 @@
 from collections import deque
 from threading import Thread
-from Queue import Queue
 import numpy as np
 import cv2
 
@@ -18,8 +17,8 @@ class Follow():
         self.bl = (35, 75, 50)
         self.bu = (85, 155, 255)
 
-        # Buffer for tracking
-        self.buff = 15
+        # Buffer for tracking default is 15
+        self.buff = 50
 
         # Minimum radius
         self.min_radius = 10
@@ -36,6 +35,8 @@ class Follow():
 
         # Line trail
         self.line = (0, 89, 217)
+        self.line2 = (0, 255, 255)
+        self.line3 = (0, 0, 255)
 
         # Size of roi square
         self.roi_size = 30
@@ -163,7 +164,21 @@ class Follow():
              
                     # otherwise, compute the thickness of the line and draw the connecting lines
                     thickness = int(np.sqrt(self.buff / float(i + 1)) * 5)
-                    cv2.line(frame, pts[i - 1], pts[i], self.line, thickness)
+
+                    # cv2.line(frame, pts[i - 1], pts[i], self.line, thickness)
+
+                    # if i % 2 == 0:
+                    #     cv2.line(frame, pts[i - 1], pts[i], self.line, thickness)
+                    # else:
+                    #     cv2.line(frame, pts[i - 1], pts[i], self.line2, thickness)
+
+
+                    if i % 2 == 0:
+                        cv2.line(frame, pts[i - 1], pts[i], self.line, thickness)
+                    elif i % 3 == 0:
+                        cv2.line(frame, pts[i - 1], pts[i], self.line2, thickness)
+                    else:
+                        cv2.line(frame, pts[i - 1], pts[i], self.line3, thickness)
      
             else:
                 # If no circle, reset the line tracker
@@ -180,9 +195,6 @@ class Follow():
 
         # Stop flag
         self.halt = 0
-
-        # Frame queue
-        self.f_queue = Queue()
 
         # Initialize thread
         self.t = Thread(target=self.update)
@@ -201,10 +213,7 @@ class Follow():
         while not self.halt:
 
             # Grab the current web frame
-            frame = self.camera.read()[1]
-
-            # Put it in the queue
-            self.f_queue.put(frame)
+            self.frame = self.camera.read()[1]
 
 
 
@@ -212,42 +221,43 @@ class Follow():
 
     def capture(self):
 
+        # Wait a moment until we have a frame instances
+        cv2.waitKey(500) & 0xFF
+
         # Loop untill we stop
         while not self.halt:
 
-            if not self.f_queue.empty():
+            # Grab the current web frame
+            frame = self.frame
 
-                # Grab the current web frame
-                frame = self.f_queue.get()
+            # Convert to HSV colorspace
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-                # Convert to HSV colorspace
-                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            # Look for balls
+            frame, mask = self.ball(hsv, frame)
 
-                # Look for balls
-                frame, mask = self.ball(hsv, frame)
+            # show the frame to our screen
+            cv2.imshow("Frame", frame)
 
-                # show the frame to our screen
-                cv2.imshow("Frame", frame)
+            if self.show_mask:
+                cv2.imshow('Mask', mask)
 
+            # exit on escape
+            k = cv2.waitKey(5) & 0xFF
+
+            if k == 27:
+                self.halt = 1
+                break
+
+            if k == 109:
                 if self.show_mask:
-        			cv2.imshow('Mask', mask)
+                    self.show_mask = 0
+                    cv2.destroyWindow('Mask')
+                else:
+                    self.show_mask = 1
 
-                # exit on escape
-                k = cv2.waitKey(5) & 0xFF
-
-                if k == 27:
-                    self.halt = 1
-                    break
-
-                if k == 109:
-                	if self.show_mask:
-                		self.show_mask = 0
-                		cv2.destroyWindow('Mask')
-                	else:
-                		self.show_mask = 1
-
-                if k == 114:
-                    self.halt = 1
+            if k == 114:
+                self.halt = 1
 
         if k == 114:
             cv2.destroyWindow('Mask')
@@ -262,5 +272,3 @@ class Follow():
 
 tracker = Follow()
 tracker.calibrate()
-# tracker.start_thread()
-# tracker.capture()
